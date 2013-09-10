@@ -1,0 +1,87 @@
+<?php
+
+function fi_export_import_csv_install() {
+
+  drupal_install_schema('fi_export_import_csv');
+
+}
+
+
+function fi_export_import_csv_uninstall() {
+
+	drupal_uninstall_schema('fi_export_import_csv');
+
+}
+
+function fi_export_import_csv_schema() {
+
+	$schema['fi_ei_csv_import_errors'] = array(
+		'description' => t('Stores validate csv fields errors for process import.'),
+
+		'fields'=> array(
+
+				'fid' => array(
+          'type' => 'int',
+          'size' => 'small',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'description' => 'Imported csv File Id .',
+        ),
+
+				'line_id' => array(
+	        'type' => 'int',
+	        'size' => 'medium',
+	        'not null' => TRUE,
+	        'description' => 'Line number with field validate error in imported csv file .',
+	      ),
+
+        'error_description' => array(
+          'type' => 'text',
+          'not null' => TRUE,
+          'description' => 'The error description.',
+        ),
+    ),
+
+    'indexes' => array(
+      'fid' => array('fid'),
+    ),
+
+	);
+
+	$schema['fi_ei_csv_import_history'] = array(
+		'description' => t('Stores the import products history.'),
+
+		'fields'=> array(
+
+				'fid' => array(
+          'type' => 'int',
+          'size' => 'small',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'description' => 'Imported the csv File Id.',
+        ),
+
+				'import_date' => array(
+          'description' => 'The date of import process.',
+          'type' => 'int',
+          'not null' => TRUE,
+        ),
+
+        'qty_lines' => array(
+          'type' => 'int',
+          'size' => 'small',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'description' => 'Quantity lines in csv file.',
+        ),
+    ),
+
+    'indexes' => array(
+      'fid' => array('fid'),
+    ),
+
+	);
+
+	return $schema;
+
+}

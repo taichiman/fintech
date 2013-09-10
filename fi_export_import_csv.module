@@ -1,0 +1,656 @@
+<?php
+
+//// initials
+$vid_5_terms; //terms of 5 - vocabulary with diffrent handling
+
+// Filed names in csv file;
+global $csv_field_names;
+//"Brand","Coating","Type","Backing","Categories","Abbr. Material","Material","Product Category","Name","Fintech Description","Google Description","Width","Length","Grit","SKU","Qty. Per Unit","Backing","Weight","Ship Weight","Price","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Stock","Ship Length","Ship Width","Ship Height","OVERSIZED","product quantity","Google Image"
+$csv_field_names = array( "field_brand['0']['value']", "vokabulary_9", "vokabulary_17", "vokabulary_10", "vokabulary_1", "vokabulary_20", "vokabulary_18", "field_product_category[0]['nid']", "title", "field_fintech_description[0]['value']", "body", "vokabulary_16", "vokabulary_14", "vokabulary_7", "model", "vokabulary_6", "vokabulary_10", "vokabulary_8", "weight", "sell_price", "Usage", "Usage", "Usage", "Usage", "Usage", "Usage", "Usage", "Usage", "Usage", "Usage", "vokabulary_11", "length", "width", "height", "vokabulary_19", "pkg_qty", "field_url_image[0]['value']" );
+////-----
+
+
+/**
+ * Display help and module information
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+function fi_export_import_csv_help( $path = 'admin/help#fi_export_import_csv', $arg ) {
+  $output = ''; //declare your output variable
+  switch ( $path ) {
+    case "admin/help#fi_export_import_csv":
+      $output = '<p>' . t( "This module exports nodes to CSV file with Views." ) . t( " Then you can import nodes to Drupal from CSV." ) . '</p>';
+      $output .=
+        '<br>' .
+          '<p>' . ' It is <span style="color:red; font-weight:bold;" >VERY IMPORTANT</span> that before import you should make backup your current database by module ' . l( 'Backup and Migrate', 'admin/content/backup_migrate' ) . '. Then If some import errors happens, you can restore all your data.' . '</p>' .
+          '<br>' .
+          '<p>' . 'You should use only this fields order in csv file. Example CSV fields format:' . '</p>' .
+          '<p>' . '"Brand","Coating","Type","Backing","Categories","Abbr. Material","Material","Product Category","Name"' . '<span style="color:red; font-weight:bold;" >(*)</span>' . ',"Fintech Description","Google Description","Width","Length","Grit","SKU","Qty. Per Unit","Backing","Weight","Ship Weight","Price","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Stock","Ship Length","Ship Width","Ship Height","OVERSIZED","product quantity","Google Image"' . '</p>' .
+          '<p>' . '"Stolichnaya","Closed","","","Belts","A/O","Aluminum Oxide","A/O 54"" x 103""","54"" X 103"" 80 Grit Wide Sanding Belt, 1-Pk","ABR BELT XA345 80 54 X 103 W/U","54"" X 103"" Woodworking Sanding Belts (Wide Belt) 80 grit. Aluminum Oxide (A/O). Open coat, heavy X weight Cloth backing. Sold in packs of 1. High quality and long lasting woodworking industrial abrasive sanding belts provide an even finish on wood, hardwood, softwood, non ferrous metals (aluminum, titanium etc.), plastics, composites, and solid surface.  Open coating reduces loading and provides a more even finish. Water resistant belts. Resin over resin bonding. Bi-directional tape joint. This sandpaper material is anti-static (reduces dust) with an anti-clogging stearate coating to reduce loading and heat from friction. Assembled in USA.","54","103","2500","BXA0805401030T","1","","X","7.35","81.16","Paint and Finish","","Ferrous Metal","Fiberglass, Granite, Marble, Tile, Glass","","Leather","Plastic","Solid Surface","Hardened and Stainless Steels","","2-4 Days","11","15","57","Oversized","99","http://www.fintechabrasives.com/sites/default/files/widebelt.jpg"' . '</p>' .
+          '<p>' . '<span style="color:red; font-weight:bold;" >(*)</span>' .
+          ' - mandatory field for node identification' . '</p>' .
+          '<br>';
+      break;
+    case "admin/content/fi_export_import_csv":
+      $output = '<p>' . t( "This module exports/imports your nodes with CSV." ) . '</p>';
+      break;
+  }
+  return $output;
+} // function fi_export_import_csv_help
+
+
+///**
+// * Valid permissions for this module
+// * @return array An array of valid permissions for the fi_export_import_csv_perm module
+// */
+//function fi_export_import_csv_perm() {
+//  return array('export/import content with fi_Export_Import_csv');
+//} // function fi_export_import_csv_perm()
+
+
+/**
+ * Implements hook_menu().
+ */
+function fi_export_import_csv_menu() {
+
+  $items['admin/content/fi_export_import_csv'] = array(
+    'title' => 'fi Export/Import to CSV',
+    'description' => 'Modele\'s dashboard',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array( 'fi_export_import_csv_form' ),
+//    'access arguments' => array('export/import content with fi_Export_Import_csv'),
+    'access arguments' => array( 'administer nodes' ),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  $items['admin/content/fi_export_import_csv/%/errors'] = array(
+//    'title' => 'List errors the csv file: ',
+    'title callback' => 'fi_export_import_csv_errors_list_title',
+    'title arguments' => array( 3 ),
+    'page callback' => 'fi_export_import_csv_errors_list',
+    'page arguments' => array( 3 ),
+    'access callback' => 'user_access',
+    'access arguments' => array( 'administer nodes' ),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implementation of hook_theme()
+ */
+function fi_export_import_csv_theme() {
+  return array(
+    'list_import_history' => array(
+      'arguments' => array(),
+    ),
+  );
+}
+
+
+function fi_export_import_csv_form() {
+  $form = array();
+
+  $form['history'] = array(
+    '#type' => 'fieldset',
+    '#title' => t( 'History' ),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['export'] = array(
+    '#type' => 'fieldset',
+    '#title' => t( 'Export' ),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+  );
+
+  $form['import'] = array(
+    '#type' => 'fieldset',
+    '#title' => t( 'Import' ),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['history']['history_list'] = array(
+    '#value' => theme( 'list_import_history' ),
+  );
+
+  $form['export']['important_info1'] = array(
+    '#value' => '<p>To config Export, select ' . l( t( 'Views' ), 'admin/build/views/edit/export_nodes_to_csv' ) . '</p>',
+  );
+
+  $form['export']['important_info2'] = array(
+    '#value' => '<p>Select ' . l( 'CSV file', 'export_nodes_to_csv' ) . ' for download file with export nodes. ( Note: Export operation will take a while ). ' . '</p>',
+  );
+
+//  $form['import']['important_info3'] = array(
+//    '#value' =>'<p>'.'Not completed yet'.'</p>',
+//    '#weight' => 0,
+//  );
+
+  $form['#attributes'] = array( 'enctype' => "multipart/form-data" );
+
+  $form['import']['important_info4'] = array(
+    '#value' => '<p>' . ' It is <span style="color:red; font-weight:bold;" >VERY IMPORTANT</span> that before import you should make backup your current database by module ' . l( 'Backup and Migrate', 'admin/content/backup_migrate' ) . '. Then If some import errors happens, you can restore all your data.' . '</p>' .
+      '<br>' .
+      '<p>' . 'Example CSV fields format:' . '</p>' .
+      '<p>' . '"Brand","Coating","Type","Backing","Categories","Abbr. Material","Material","Product Category","Name"' . '<span style="color:red; font-weight:bold;" >(*)</span>' . ',"Fintech Description","Google Description","Width","Length","Grit","SKU","Qty. Per Unit","Backing","Weight","Ship Weight","Price","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Usage","Stock","Ship Length","Ship Width","Ship Height","OVERSIZED","product quantity","Google Image"' . '</p>' .
+      '<p>' . '"Stolichnaya","Closed","","","Belts","A/O","Aluminum Oxide","A/O 54"" x 103""","54"" X 103"" 80 Grit Wide Sanding Belt, 1-Pk","ABR BELT XA345 80 54 X 103 W/U","54"" X 103"" Woodworking Sanding Belts (Wide Belt) 80 grit. Aluminum Oxide (A/O). Open coat, heavy X weight Cloth backing. Sold in packs of 1. High quality and long lasting woodworking industrial abrasive sanding belts provide an even finish on wood, hardwood, softwood, non ferrous metals (aluminum, titanium etc.), plastics, composites, and solid surface.  Open coating reduces loading and provides a more even finish. Water resistant belts. Resin over resin bonding. Bi-directional tape joint. This sandpaper material is anti-static (reduces dust) with an anti-clogging stearate coating to reduce loading and heat from friction. Assembled in USA.","54","103","2500","BXA0805401030T","1","","X","7.35","81.16","Paint and Finish","","Ferrous Metal","Fiberglass, Granite, Marble, Tile, Glass","","Leather","Plastic","Solid Surface","Hardened and Stainless Steels","","2-4 Days","11","15","57","Oversized","99","http://www.fintechabrasives.com/sites/default/files/widebelt.jpg"' . '</p>' .
+      '<p>' . '<span style="color:red; font-weight:bold;" >(*)</span>' .
+      ' - mandatory field for node identification' . '</p>' .
+      '<br>',
+    '#weight' => 0,
+  );
+
+  $form['import']['datafile'] = array(
+    '#type' => 'file',
+    '#title' => t( 'Upload data' ),
+    '#description' => t( 'A CSV in the requisite format' ),
+    '#size' => 100,
+  );
+
+  $form['import']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t( 'Import' ),
+  );
+
+//  return system_settings_form($form);
+  return $form;
+
+}
+
+function fi_export_import_csv_form_submit( $form, &$form_state ) {
+
+  // set datafile upload variables
+  $source = 'datafile';
+  $validators = array( 'file_validate_extensions' => array( 'csv' ) );
+  $dest = file_directory_temp();
+
+  // upload datafile
+  $file = file_save_upload( $source, $validators, $dest );
+  if ( $file ) {
+  } else {
+    drupal_set_message( 'No file uploaded.', 'error', TRUE );
+  }
+
+//comment for test csv file
+//  $file = new stdClass();
+//  $file->filepath = '/home/densom/drupal/tasks/export/tony/pull_from_fintech/view-test_1_line.csv';
+//---todo
+
+  //import and process nodes from $file
+  if ( $file ) {
+    $lines = fi_export_import_csv_read_file( $file );
+
+    //Add the file to import history
+    db_query( "INSERT INTO {fi_ei_csv_import_history} (fid, import_date, qty_lines) VALUES ('%d', '%d', '%d')", $file->fid, time(), count( $lines ) - 1 );
+
+    _fi_export_import_csv_import( $lines, $file );
+  }
+}
+
+
+/**
+ * Find all terms associated with the given vokabulary.
+ */
+function _taxonomyden_get_terms_by_vocabulary( $vid ) {
+  $result = db_query( 'SELECT t.tid, t.* FROM {term_data} t WHERE t.vid = %d ORDER BY weight', $vid );
+  $terms = array();
+  while ( $term = db_fetch_object( $result ) ) {
+    $terms[$term->tid] = $term;
+  }
+  return $terms;
+}
+
+/**
+ * Find all field associated with the given field value
+ */
+function _databaseden_get_value_in_field( $table, $search_field, $search_value, $value_type, $where_added = NULL ) {
+  $result = db_query( 'SELECT t.* FROM {{$table}} t WHERE t.{$search_field} = {$value_type}{$where_added}', $search_value );
+  $rows = array();
+  while ( $row = db_fetch_object( $result ) ) {
+    $rows[] = $row;
+  }
+  return $rows;
+}
+
+/**
+ * Find nid for node 'product_category'with it title
+ */
+function _databaseden_get_nid_product_category( $title ) {
+  //init
+
+  $return = array( 'error' => '', 'category' => '' );
+//@to_do_den may_by: Alarm validation: double category name
+  $category = db_fetch_object( db_query( "SELECT n.* FROM {node} n WHERE n.title = '%s' AND n.type= 'product_category'", $title ) );
+  if ( !$category ) {
+    $return['error'] = "Bad name category: {$title}";
+  } else {
+    $return['category'] = $category;
+  }
+  return $return;
+}
+
+function _fi_ei_search_term_in_Usages_taxonomy( $needle, $haystack ) {
+  foreach ( $haystack as $k => $v ) {
+    if ( $v->name == $needle ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Update existens node with info from csv. For Import process.
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+function _fi_export_import_csv_import_node_update( &$node, $fields, $line_id ) {
+  global $csv_field_names,
+         $vid_5_terms;
+
+  $errors = array();
+
+//to_do_den Исключить vokabulary_10. This vokabulary doubled in csv
+
+  $node->field_brand[0]['value'] = trim( $fields[0] );
+
+  $temp_category = _databaseden_get_nid_product_category( trim( $fields[7] ) );
+  if ( !$temp_category['error'] ) {
+    $node->field_product_category[0]['nid'] = $temp_category['category']->nid;
+  } else {
+    $errors[] = "Line [ {$line_id} ] " . $temp_category['error'];
+  }
+  ;
+
+
+  //Don't set, because update on title. $node->title = $fields[8];
+  $node->field_fintech_description[0]['value'] = trim( $fields[9] );
+  $node->body = trim( $fields[10] );
+  $node->teaser = node_teaser( $node->body, isset( $node->format ) ? $node->format : NULL );
+  $node->model = trim( $fields[14] );
+  $node->weight = trim( $fields[18] );
+  $node->sell_price = trim( $fields[19] );
+  $node->length = trim( $fields[31] );
+  $node->width = trim( $fields[32] );
+  $node->height = trim( $fields[33] );
+  $node->pkg_qty = trim( $fields[35] );
+  $node->field_url_image[0]['value'] = trim( $fields[36] );
+
+
+  //// Taxonomy import. Now, I need delete olds terms which are in csv and merge thos new_terms with node array.
+  $i = 0;
+  $new_terms = array();
+  foreach ( $csv_field_names as $field_name ) {
+    if ( preg_match( '/vokabulary_(\d+)/', $field_name, $vid ) ) {
+
+      //delete all terms from vokabulary with vid = $vid[1]. Delete all old terms? witch being in csv, exept (Usages, becouse its different process).
+      foreach ( $node->taxonomy as $term ) {
+        if ( $term->vid == $vid[1] ) {
+          unset( $node->taxonomy["{$term->tid}"] );
+        }
+      }
+
+      //create new terms array. Then will add it in node->taxonomy
+      $terms = taxonomy_get_term_by_name( trim( $fields[$i] ) );
+
+      //delete terms from another vids. Protect from equal terms name in different vokabulary our database.
+      $i1 = 0;
+      foreach ( $terms as $t ) {
+        if ( $t->vid != $vid[1] ) {
+          unset( $terms[$i1] );
+        }
+        $i1++;
+      }
+
+      //Validation. No terms in ceurrent processed vocabular, then bad term name in csv or ''
+      if ( ( count( $terms ) == 0 ) && ( $fields[$i] != '' ) ) {
+        $errors[] = "Line [ {$line_id} ] " . "Bad term {$fields[$i]}";
+        //$error_taxonomi=$fields[$i];
+      }
+
+      foreach ( $terms as $t => $v ) {
+        $new_terms[$v->tid] = $v;
+      }
+    }
+
+    $i++;
+  }
+  ;
+  // and merge new_terms from csv with node array. Now I have node with terms from csv.
+  foreach ( $new_terms as $t => $v ) {
+    $node->taxonomy[$t] = $v;
+  }
+  ;
+
+  unset( $t, $v, $i1, $i, $vid, $terms );
+  ////---------------
+
+
+  ////"Usage" terms
+  //// Update in node taxonomy with vocabulary Usage vid=5.Attention: Taxonomy fields (Usage) don't depend from sequence in csv file.
+  unset( $new_terms );
+  foreach ( $node->taxonomy as $k => $v ) {
+    if ( $v->vid == 5 ) {
+      unset( $node->taxonomy[$k] );
+    }
+  }
+  unset( $k, $v );
+
+  //rest term with names like csv. usage_names - all filelds value from csv
+  $only_vid_5_terms = $vid_5_terms;
+  $usage_names = array(); //ary with name Usages vocabulary from csv,
+
+  for ( $i = 20; $i <= 29; $i++ ) {
+    if ( $fields[$i] != "" ) {
+
+      //Validation: CHeck validity "Usage" terms from csv
+      if ( _fi_ei_search_term_in_Usages_taxonomy( trim( $fields[$i] ), $vid_5_terms ) ) {
+        //Mark valid term
+        $usage_names[$fields[$i]] = 1;
+      } else {
+        $errors[] = "Line [ {$line_id} ] " . "Bad Usages term {$fields[$i]}";
+      }
+
+    }
+  }
+
+  foreach ( $only_vid_5_terms as $k => $v ) {
+    if ( !array_key_exists( $v->name, $usage_names ) ) {
+      unset( $only_vid_5_terms[$k] );
+    }
+  }
+
+  // and merge terms from 5-vid with node array. Now I have node with all terms from csv.
+  foreach ( $only_vid_5_terms as $t => $v ) {
+    $node->taxonomy[$t] = $v;
+  }
+  ;
+
+  //-------
+  ////------
+
+  node_validate( $node );
+
+  // delete redundant warnings from some modules
+  if ( isset( $_SESSION['messages']['error'] ) ) {
+    foreach ( $_SESSION['messages']['error'] as $k => $error ) {
+      //from node referene module. with message " Product Category: this post can't be referenced."
+      if ( preg_match( '/this post can\'t be referenced/', $error ) ) {
+        unset( $_SESSION['messages']['error'][$k] );
+      }
+    }
+  }
+  //----
+
+
+  //get errors for number fields : Price, Weight, ...
+  if ( isset( $_SESSION['messages']['error'] ) ) {
+    foreach ( $_SESSION['messages']['error'] as $error ) {
+      $errors[] = "Line [ {$line_id} ] " . "{$error}";
+    }
+  }
+
+  unset( $_SESSION['messages']['error'] );
+
+//  @to-do_den что за странное поле в термине v-weight-unused.I don't know.
+
+  return $errors;
+}
+
+/**
+ * General function for Import (create/update) one node. For Import process.
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+
+function _fi_export_import_csv_import_node( $fields, $line_id, $file, &$context ) {
+  //// settings for beginning
+  global $vid_5_terms;
+
+//  if (!isset($context['results']['updated'])) {
+//    $context['results']['count_updated'] = 0;
+//  }
+
+  $vid_5_terms = _taxonomyden_get_terms_by_vocabulary( 5 ); //5 - vocabulary with diffrent handling
+  ////-----
+
+  $node = node_load( array( 'title' => trim($fields[8]) ), NULL, TRUE );
+
+
+
+  // return: if node is't seeked
+  if ( !$node ) {
+
+    $context['message'] = 'There are errors in csv file.';
+    $errors[] = "Line[{$line_id}]: No product with the title: {$fields[8]}";;
+
+  } else {
+
+    // Optimize: copy node for compare on changes, before will save
+    $node_old = clone $node;
+
+    // create node object
+    $errors = _fi_export_import_csv_import_node_update( $node, $fields, $line_id );
+  }
+
+  //save node object
+  if ( count( $errors ) > 0 ) {
+    $context['message'] = 'There are errors in csv file.';
+  } else {
+    if ( $node != $node_old ) {
+      node_save( $node );
+
+      // delete redundant warnings from some modules
+      if ( isset( $_SESSION['messages']['error'] ) ) {
+        foreach ( $_SESSION['messages']['error'] as $k => $error ) {
+          //from filefield module. It attempts to save imagefield with null value. We use image_url now.
+          if ( preg_match( '/The selected file /', $error ) ) {
+            unset( $_SESSION['messages']['error'][$k] );
+          }
+        }
+        // remove error ary from set_message or red errors messages line may be show
+        if ( count( $_SESSION['messages']['error'] ) == 0 ) {
+          unset( $_SESSION['messages']['error'] );
+        }
+      }
+      //----
+
+      $context['results']['updated'][] = $line_id;
+    }
+  }
+
+  // Save error to database (table: fi_ei_csv_import )
+  foreach ( $errors as $k => $v ) {
+    db_query( "INSERT INTO {fi_ei_csv_import_errors} (fid, line_id, error_description) VALUES ('%d', '%d', '%s')", $file->fid, $line_id, $v );
+  }
+
+  return TRUE;
+}
+
+
+function _fi_ei_import_batch_finished( $success, $results, $operations ) {
+
+  if ( $success ) {
+//    $message = "Updated nodes: " . count( $results['updated'] ) . ".<br><br>";
+//    $message .= "There are " . count( $csv_fields_errors ) . ' errors:';
+//    $message .= theme( 'item_list', $csv_fields_errors );
+  }
+//  else {
+//  }
+//  drupal_set_message( $message, 'status', TRUE );
+}
+
+
+/**
+ * Import nodes.
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+function _fi_export_import_csv_import( $lines, $file ) {
+
+  $batch = array(
+    'title' => t( 'Importing' ),
+    'operations' => array(),
+    'error_message' => t( 'Import Batch has encountered an error.' ),
+    'finished' => '_fi_ei_import_batch_finished',
+  );
+  $line_id = 1;
+  foreach ( $lines as $k => $line ) {
+    if ( $k == 0 ) {
+      continue;
+    }
+    $batch['operations'][] = array( '_fi_export_import_csv_import_node', array( $line, $line_id+1, $file ) );
+    $line_id++;
+  }
+
+  batch_set( $batch );
+
+}
+
+/******************************************************************************
+ * File functions                                                          *
+ ******************************************************************************/
+
+function fi_export_import_csv_read_file( $file ) {
+  $sFloc = $file->filepath;
+  // read in csv file
+  if ( ( $handle = fopen( $sFloc, "r" ) ) !== FALSE ) { //Open the File.
+    // Set the parent multidimensional array key to 0.
+    $iKey = 0;
+    while ( ( $data = fgetcsv( $handle, null, "," ) ) !== FALSE ) {
+      // Count the total keys in the row.
+      $iCount = count( $data );
+      // Populate the multidimensional array.
+      for ( $iElement = 0; $iElement < $iCount; $iElement++ ) {
+        $aProds[$iKey][$iElement] = $data[$iElement];
+      }
+      $iKey++;
+    }
+    // Close the File.
+    fclose( $handle );
+  }
+
+  return $aProds;
+}
+
+/**
+ * Implementation of hook_views_api().
+ */
+function fi_export_import_csv_views_api() {
+  return array(
+    'api' => 2,
+  );
+}
+
+function fi_export_import_csv_convert_multiterm( $tid, $node_vid ) {
+
+  $output = '';
+
+  $term_presence = db_fetch_object( db_query( "SELECT * FROM {term_node} t_n WHERE t_n.vid = {$node_vid} and t_n.tid ='%d' ", $tid ) );
+
+  if ( $term_presence ) {
+    $output = taxonomy_get_term( $tid )->name;
+  }
+
+
+  return $output;
+
+
+}
+
+function theme_list_import_history() {
+
+  // get imports history
+  $files = db_query( "SELECT h.fid, f.filename, h.import_date, h.qty_lines as qty_good FROM {fi_ei_csv_import_history} h INNER JOIN {files} f ON h.fid=f.fid ORDER BY h.import_date DESC" );
+
+  while ( $file = db_fetch_array( $files ) ) {
+    $files_list[$file['fid']] = $file;
+    unset( $files_list[$file['fid']]['fid'] );
+    $files_list[$file['fid']]['qty_error'] = 0;
+    $files_list[$file['fid']]['import_date'] = date( 'Y-m-d H:i:s', $files_list[$file['fid']]['import_date'] );
+  }
+  ;
+
+  // get quantity errors line in processed imports
+  $result = db_query( "SELECT fid, count(line_id) as qty_err FROM ( SELECT e.fid, e.line_id FROM {fi_ei_csv_import_errors} e GROUP BY e.fid, e.line_id) e GROUP BY fid" );
+
+  while ( $error = db_fetch_array( $result ) ) {
+    $qty_errors[$error['fid']] = $error;
+    unset( $qty_errors[$error['fid']]['fid'] );
+  }
+  ;
+
+  //calqulate no errors lines for each import files
+  foreach ( $qty_errors as $fid => $qty_err ) {
+    $files_list[$fid]['qty_good'] = $files_list[$fid]['qty_good'] - $qty_err['qty_err'];
+    $files_list[$fid]['qty_error'] = $qty_err['qty_err'];
+  }
+
+
+  //create table
+  $header = array( array( 'data' => 'filename' ), array( 'data' => 'date' ), array( 'data' => 'imported' ), array( 'data' => 'not imported' ) );
+  foreach ( $files_list as $fid => $v ) {
+    //create link to list errors
+    if ( $v['qty_error'] > 0 ) {
+      $v['qty_error'] = l( $v['qty_error'], "admin/content/fi_export_import_csv/{$fid}/errors" );
+    } else {
+      $v['qty_error'] = '';
+    }
+    //--
+    $rows[] = $v;
+  }
+
+  return '<div>' . theme( 'table', $header, $rows ) . '</div>';
+}
+
+
+/**
+ * Menu callback; displays the List validation errors for imported csv file.
+ */
+function fi_export_import_csv_errors_list( $fid ) {
+
+  $query = db_query( "SELECT line_id, error_description FROM {fi_ei_csv_import_errors}  WHERE fid ='%d' ", $fid );
+
+  while ( $error = db_fetch_array( $query ) ) {
+    $errors_list_raw[] = $error;
+  }
+  $errors_list = array();
+
+  // reformate array
+  foreach ( $errors_list_raw as $k => $v ) {
+    $errors_list[$v['line_id']]['line_id'] = $v['line_id'];
+    $errors_list[$v['line_id']]['error_description'] .= $v['error_description'] . '<br>';
+  }
+
+  //create table
+  $header = array( array( 'data' => 'line (product)' ), array( 'data' => 'error description' ) );
+  if ( isset( $errors_list ) ) {
+    foreach ( $errors_list as $k => $v ) {
+      $rows[] = $v;
+    }
+  }
+
+  return '<div>' . theme( 'table', $header, $rows ) . '<br>' . l( '<< Back to Export/Import module', 'admin/content/fi_export_import_csv' ) . '</div>';
+
+}
+
+
+/**
+ * Menu callback; displays title of the List validation errors for imported csv file.
+ */
+function fi_export_import_csv_errors_list_title( $fid ) {
+
+  $file = db_fetch_array( db_query(
+    "SELECT f.filename, h.import_date FROM {fi_ei_csv_import_history} h INNER JOIN {files} f ON h.fid=f.fid WHERE h.fid = '%d'", $fid ) );
+
+  $file_info = strtoupper( $file['filename'] ) . ', ' . date( 'Y-m-d H:i:s', $file['import_date'] );
+
+  return "List of validation errors for csv file:  {$file_info}";
+}

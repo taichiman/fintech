@@ -1,0 +1,6 @@
+name = fi_Export_Import_CSV
+description = Export/import CSV.
+core = 6.x
+package = "Views"
+
+dependencies[] = views_bonus_export
